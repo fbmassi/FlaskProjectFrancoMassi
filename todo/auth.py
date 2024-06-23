@@ -12,10 +12,10 @@ def register():
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
-        db, c = get_db
+        db, c = get_db()
         error = None
         c.execute(
-            'SELECT id FROM user WHERE username = %s', 
+            'SELECT id FROM user WHERE username = %s', (username,)
         )
         if not username:
             error = 'Usuario es requerido'
@@ -38,10 +38,10 @@ def login():
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
-        db, c = get_db
+        db, c = get_db()
         error = None
         c.execute(
-            'SELECT id FROM user WHERE username = %s', (username,)
+            'SELECT * FROM user WHERE username = %s', (username,)
         )
         user = c.fetchone()
         if user is None:
@@ -51,6 +51,32 @@ def login():
         if error is None:
             session.clear()
             session['user_id'] = user['id']
-            return redirect(url_for('index'))
+            return redirect(url_for('todo.index'))
         flash(error)
     return render_template('auth/login.html')
+
+@bp.before_app_request
+def load_logged_in_user():
+    user_id = session.get('user_id')
+    if user_id is None:
+        g.user=None
+    else:
+        db, c = get_db()
+        c.execute(
+            'SELECT * FROM user WHERE id = %s', (user_id,)
+        )
+        g.user = c.fetchone()
+        
+
+def login_required(view):
+    @functools.wraps(view)
+    def wrapped_view(**kwargs):
+        if g.user is None:
+            return redirect(url_for('auth.login'))
+        return view(**kwargs)
+    return wrapped_view
+
+@bp.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('auth.login'))
